@@ -9,3 +9,6 @@
 add_executable(bench_ivf_selector EXCLUDE_FROM_ALL bench_ivf_selector.cpp)
 target_link_libraries(bench_ivf_selector PRIVATE faiss)
 
+add_executable(bench_simple_run EXCLUDE_FROM_ALL bench_simple_run.cpp)
+target_link_libraries(bench_simple_run PRIVATE faiss)
+
