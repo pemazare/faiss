@@ -16,7 +16,9 @@
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/DistanceComputer.h>
 #include <faiss/impl/FaissAssert.h>
+#include <faiss/impl/ResultHandler.h>
 #include <faiss/utils/utils.h>
+
 
 namespace faiss {
 
@@ -25,6 +27,55 @@ namespace faiss {
  ***************************************************************************/
 
 namespace {
+
+
+template <class VD, class ResultHandler>
+void pairwise_distances_processor(
+        VD vd,
+        int64_t nq,
+        const float* xq,
+        int64_t nb,
+        const float* xb,
+        int64_t ldq,
+        int64_t ldb,
+        ResultHandler &rh) {
+
+    constexpr int64_t bs_q = 6;
+    constexpr int64_t bs_b = 5;
+
+    {
+        float dis[bs_q * bs_b];
+
+        for (int64_t i0 = 0; i0 < nq; i0 += bs_q) {
+            int64_t i1 = std::min(i0 + bs_q, nq);
+            const float* xqi = xq + i0 * ldq;
+            const float* xbj = xb;
+            rh.begin_multiple(i0, i1);
+
+            for (int64_t j0 = 0; j0 < nb; j0 += bs_b) {
+                // compute one block of size bs_q * bs_b
+                // xqi and xbj point at the beginning of the arrays to compare
+                int64_t j1 = std::min(j0 + bs_b, nb);
+                const float* xqi2 = xqi;
+                float *dd = dis;
+                for (int64_t i = i0; i < i1; i++) {
+                    const float *xbj2 = xbj;
+                    for (int64_t j = j0; j < j1; j++) {
+                        *dd++ = vd(xqi2, xbj2);
+                        xbj2 += ldb;
+                    }
+                    xqi2 += ldq;
+                }
+                xbj += ldb * bs_b;
+                rh.add_results(j0, j1, dis);
+            }
+            rh.end_multiple();
+        }
+
+    }
+}
+
+
 
 template <class VD>
 void pairwise_extra_distances_template(
@@ -58,6 +109,23 @@ void knn_extra_metrics_template(
         size_t nx,
         size_t ny,
         HeapArray<C>* res) {
+
+    HeapResultHandler<C> rh(nx, res->val, res->ids, res->k);
+    pairwise_distances_processor(vd, nx, x, ny, y, vd.d, vd.d, rh);
+
+/*
+VD vd,
+        int64_t nq,
+        const float* xq,
+        int64_t nb,
+        const float* xb,
+        int64_t ldq,
+        int64_t ldb,
+        ResultHandler &rh
+*/
+
+#if 0
+
     size_t k = res->k;
     size_t d = vd.d;
     size_t check_period = InterruptCallback::get_period_hint(ny * d);
@@ -92,6 +160,7 @@ void knn_extra_metrics_template(
         }
         InterruptCallback::check();
     }
+#endif
 }
 
 template <class VD>
@@ -200,6 +269,8 @@ void knn_extra_metrics(
             FAISS_THROW_MSG("metric type not implemented");
     }
 }
+
+// explicit instanciation
 
 template void knn_extra_metrics<CMax<float, int64_t>>(
         const float* x,
