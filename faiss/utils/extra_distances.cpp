@@ -110,30 +110,6 @@ void pairwise_distances_processor(
     }
 }
 
-template <class VD>
-void pairwise_extra_distances_template(
-        VD vd,
-        int64_t nq,
-        const float* xq,
-        int64_t nb,
-        const float* xb,
-        float* dis,
-        int64_t ldq,
-        int64_t ldb,
-        int64_t ldd) {
-#pragma omp parallel for if (nq > 10)
-    for (int64_t i = 0; i < nq; i++) {
-        const float* xqi = xq + i * ldq;
-        const float* xbj = xb;
-        float* disi = dis + ldd * i;
-
-        for (int64_t j = 0; j < nb; j++) {
-            disi[j] = vd(xqi, xbj);
-            xbj += ldb;
-        }
-    }
-}
-
 template <class VD, class C>
 void knn_extra_metrics_template(
         VD vd,
@@ -226,30 +202,6 @@ void pairwise_extra_distances(
     StorageResultHandler rh(nq, nb, dis, ldd);
     pairwise_distances_processor(mt, metric_arg, d, nq, xq, nb, xb, d, d, rh);
 }
-#if 0
-    switch (mt) {
-#define HANDLE_VAR(kw)                                            \
-    case METRIC_##kw: {                                           \
-        VectorDistance<METRIC_##kw> vd = {(size_t)d, metric_arg}; \
-        pairwise_extra_distances_template(                        \
-                vd, nq, xq, nb, xb, dis, ldq, ldb, ldd);          \
-        break;                                                    \
-    }
-        HANDLE_VAR(L2);
-        HANDLE_VAR(L1);
-        HANDLE_VAR(Linf);
-        HANDLE_VAR(Canberra);
-        HANDLE_VAR(BrayCurtis);
-        HANDLE_VAR(JensenShannon);
-        HANDLE_VAR(Lp);
-        HANDLE_VAR(Jaccard);
-#undef HANDLE_VAR
-        default:
-            FAISS_THROW_MSG("metric type not implemented");
-    }
-}
-#endif
-
 
 FlatCodesDistanceComputer* get_extra_distance_computer(
         size_t d,
