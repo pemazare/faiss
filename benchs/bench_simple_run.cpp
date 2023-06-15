@@ -7,11 +7,13 @@
 #include <faiss/utils/random.h>
 #include <faiss/utils/utils.h>
 #include <faiss/utils/distances.h>
+#include <faiss/utils/extra_distances.h>
 #include <faiss/IndexHNSW.h>
 #include <faiss/IndexBinaryFlat.h>
 #include <faiss/IndexBinaryIVF.h>
-
 #include <faiss/index_factory.h>
+#include <faiss/impl/ResultHandler.h>
+
 
 void bench_float() {
     int nb = 100 * 1000;
@@ -52,6 +54,15 @@ void bench_float() {
         printf("Brute force search, simple implementation: %.3f ms\n", t1 - t0);
     }
     faiss::distance_compute_blas_threshold = prev_threshold;
+    {
+        double t0 = faiss::getmillisecs();
+        faiss::knn_extra_metrics(
+            xq, xb, d, nq, nb, faiss::METRIC_L2, 0, D.data(), I.data(), k);
+        double t1 = faiss::getmillisecs();
+        printf("Brute force search, extra_distances implementation: %.3f ms\n", t1 - t0);
+    }
+
+
 
     std::vector<float> D2(nq * k);
     std::vector<faiss::idx_t> I2(nq * k);
@@ -183,8 +194,6 @@ void bench_binary() {
             t1 - t0, nok / float(nq * k));
     }
 }
-
-
 
 
 int main() {
