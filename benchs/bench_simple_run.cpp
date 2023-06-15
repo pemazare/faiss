@@ -11,6 +11,7 @@
 #include <faiss/IndexBinaryFlat.h>
 #include <faiss/IndexBinaryIVF.h>
 
+#include <faiss/index_factory.h>
 
 void bench_float() {
     int nb = 100 * 1000;
@@ -73,9 +74,62 @@ void bench_float() {
             t1 - t0, nok / float(nq * k));
     }
 
-
 }
 
+void bench_ivf_variant(const char *factory_key) {
+    int nb = 1000 * 1000;
+    int nq = 10 * 1000;
+    int d = 64;
+    int k = 10;
+
+    std::vector<float> xall((nq + nb) * d);
+    faiss::rand_smooth_vectors(nq + nb, d, xall.data(), 1324);
+
+    const float *xb = xall.data();
+    const float *xq = xall.data() + d * nb;
+
+    // will return an IndeIVFFlat or an IndexIVFScalarQuantizer depending
+    // on the string
+    std::unique_ptr<faiss::IndexIVF> index(
+        dynamic_cast<faiss::IndexIVF*>(faiss::index_factory(d, factory_key)));
+
+    {
+        double t0 = faiss::getmillisecs();
+        index->train(nb, xb);
+        printf("train %s: %.3f ms\n", factory_key, faiss::getmillisecs() - t0);
+        t0 = faiss::getmillisecs();
+        index->add(nb, xb);
+        printf("add: %.3f ms\n", faiss::getmillisecs() - t0);
+    }
+
+    std::vector<float> D(nq * k);
+    std::vector<faiss::idx_t> I(nq * k);
+
+    // brute force reference search
+    faiss::knn_L2sqr(
+        xq, xb, d, nq, nb, k,
+        D.data(), I.data());
+
+    std::vector<float> D2(nq * k);
+    std::vector<faiss::idx_t> I2(nq * k);
+
+    for (int nprobe: {1, 4, 16, 64}) {
+        double t0 = faiss::getmillisecs();
+        index->nprobe = nprobe;
+        index->search(nq, xq, k, D2.data(), I2.data());
+        double t1 = faiss::getmillisecs();
+        int nok = 0;
+        for(int i = 0; i < nq; i++) {
+            nok += faiss::ranklist_intersection_size(
+                k, &I[i * k],
+                k, &I2[i * k]
+            );
+        }
+        printf("%s nprobe=%d search: %.3f ms accuracy: %.3f\n",
+            factory_key, nprobe, t1 - t0, nok / float(nq * k));
+    }
+
+}
 
 void bench_binary() {
     int nb = 100 * 1000;
@@ -131,11 +185,19 @@ void bench_binary() {
 }
 
 
+
+
 int main() {
 
     bench_float();
 
     bench_binary();
+
+    bench_ivf_variant("IVF4096,Flat");
+
+    bench_ivf_variant("IVF4096,SQfp16");
+
+    bench_ivf_variant("IVF4096,SQ8");
 
     return 0;
 }
