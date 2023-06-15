@@ -90,7 +90,7 @@ struct HeapResultHandler {
         }
     }
 
-    /// add results for query i0..i1 and j0..j1
+    /// add results for query i0..i1 and j0..j1, packed in table dis_tab
     void add_results(size_t j0, size_t j1, const T* dis_tab) {
 #pragma omp parallel for
         for (int64_t i = i0; i < i1; i++) {
@@ -507,6 +507,53 @@ struct SingleBestResultHandler {
 
     /// series of results for queries i0..i1 is done
     void end_multiple() {}
+};
+
+/*****************************************************************
+ * StorageResultHandler, stores all distances in a matrix
+ *****************************************************************/
+
+struct StorageResultHandler {
+    // as long as we don't need anything else
+    using T = float;
+    using TI = idx_t;
+
+    size_t nq;
+    size_t nb;
+    size_t ld_tab;
+    T *tab;
+
+    int64_t k; // number of results to keep
+
+    StorageResultHandler(size_t nq, size_t nb, T *tab, int64_t ld_tab=-1):
+        nq(nq), nb(nb), tab(tab), ld_tab(ld_tab) {
+        if(ld_tab < 0) {ld_tab = nb; }
+    }
+
+    /******************************************************
+     * API for multiple results (called from 1 thread)
+     */
+
+    size_t i0, i1;
+
+    /// begin
+    void begin_multiple(size_t i0, size_t i1) {
+        this->i0 = i0;
+        this->i1 = i1;
+    }
+
+    /// add results for query i0..i1 and j0..j1, packed in table dis_tab
+    void add_results(size_t j0, size_t j1, const T* dis_tab) {
+        for (int64_t i = i0; i < i1; i++) {
+            for (size_t j = j0; j < j1; j++) {
+                tab[i * ld_tab + j] = *dis_tab++;
+            }
+        }
+    }
+
+    /// series of results for queries i0..i1 is done
+    void end_multiple() {
+    }
 };
 
 } // namespace faiss
