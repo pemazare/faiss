@@ -223,7 +223,10 @@ void pairwise_extra_distances(
         ldb = d;
     if (ldd == -1)
         ldd = nb;
-
+    StorageResultHandler rh(nq, nb, dis, ldd);
+    pairwise_distances_processor(mt, metric_arg, d, nq, xq, nb, xb, d, d, rh);
+}
+#if 0
     switch (mt) {
 #define HANDLE_VAR(kw)                                            \
     case METRIC_##kw: {                                           \
@@ -245,7 +248,7 @@ void pairwise_extra_distances(
             FAISS_THROW_MSG("metric type not implemented");
     }
 }
-
+#endif
 
 
 FlatCodesDistanceComputer* get_extra_distance_computer(
