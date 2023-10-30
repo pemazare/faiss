@@ -974,3 +974,6 @@ class TestSearchAndGetCodes(unittest.TestCase):
 
     def test_ivfsq(self):
         self.do_test("IVF20,SQ8")
+
+    def test_ivfrq(self):
+        self.do_test("IVF20,RQ3x4")
