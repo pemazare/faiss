@@ -7,6 +7,7 @@ import argparse
 import os
 import sys
 import time
+import json
 
 import faiss
 import numpy as np
@@ -90,7 +91,8 @@ aa('--autotune_range', default=[], nargs='*',
    help='set complete autotune range, format "var:val1,val2,..."')
 aa('--min_test_duration', default=3.0, type=float,
    help='run test at least for so long to avoid jitter')
-
+aa('--json', default=False, action="store_true",
+   help="output stats in JSON format at the end")
 args = parser.parse_args()
 
 print("args:", args)
@@ -98,6 +100,11 @@ print("args:", args)
 os.system('echo -n "nb processors "; '
           'cat /proc/cpuinfo | grep ^processor | wc -l; '
           'cat /proc/cpuinfo | grep ^"model name" | tail -1')
+
+# object to collect results
+res = argparse.Namespace()
+res.args = args.__dict__
+
 
 ######################################################
 # Load dataset
@@ -113,6 +120,7 @@ print(ds)
 
 nq, d = ds.nq, ds.d
 nb, d = ds.nq, ds.d
+
 
 
 ######################################################
@@ -286,7 +294,8 @@ else:
 
     t0 = time.time()
     index.train(xt2)
-    print("  train in %.3f s" % (time.time() - t0))
+    res.train_time = time.time() - t0
+    print("  train in %.3f s" % res.train_time)
 
     print("adding")
     t0 = time.time()
@@ -302,7 +311,8 @@ else:
             index.add(xblock)
             i0 = i1
 
-    print("  add in %.3f s" % (time.time() - t0))
+    res.t_add = time.time() - t0
+    print("  add in %.3f s" % res.t_add)
     if args.indexfile:
         print("storing", args.indexfile)
         faiss.write_index(index, args.indexfile)
@@ -387,19 +397,29 @@ def eval_setting(index, xq, gt, k, inter, min_time):
         if t1 - t0 > min_time:
             break
     ms_per_query = ((t1 - t0) * 1000.0 / nq / nrun)
+    res = {
+        "ms_per_query": ms_per_query,
+        "nrun": nrun
+    }
+    res["n"] = ms_per_query
     if inter:
         rank = k
         inter_measure = compute_inter(gt[:, :rank], I[:, :rank])
         print("%.4f" % inter_measure, end=' ')
+        res["inter_measure"] = inter_measure
     else:
+        res["recalls"] = {}
         for rank in 1, 10, 100:
-            n_ok = (I[:, :rank] == gt[:, :1]).sum()
-            print("%.4f" % (n_ok / float(nq)), end=' ')
+            recall = (I[:, :rank] == gt[:, :1]).sum() / float(nq)
+            print("%.4f" % recall, end=' ')
+            res["recalls"][rank] = recall
     print("   %9.5f  " % ms_per_query, end=' ')
     print("%12d   " % (ivf_stats.ndis / nrun), end=' ')
     print(nrun)
+    res["ndis"] = ivf_stats.ndis / nrun
+    return res
 
-
+res.search_results = {}
 if parametersets == ['autotune']:
 
     ps.n_experiments = args.n_autotune
@@ -439,7 +459,8 @@ if parametersets == ['autotune']:
 
     t0 = time.time()
     op = ps.explore(index, xq, crit)
-    print("Done in %.3f s, available OPs:" % (time.time() - t0))
+    res.t_explore = time.time() - t0
+    print("Done in %.3f s, available OPs:" % res.t_explore)
 
     op.display()
 
@@ -455,7 +476,8 @@ if parametersets == ['autotune']:
         print(opt.key.ljust(maxw), end=' ')
         sys.stdout.flush()
 
-        eval_setting(index, xq, gt, args.k, args.inter, args.min_test_duration)
+        res_i = eval_setting(index, xq, gt, args.k, args.inter, args.min_test_duration)
+        res.search_results[opt.key] = res_i
 
 else:
     print(header)
@@ -464,4 +486,8 @@ else:
         sys.stdout.flush()
         ps.set_index_parameters(index, param)
 
-        eval_setting(index, xq, gt, args.k, args.inter, args.min_test_duration)
+        res_i = eval_setting(index, xq, gt, args.k, args.inter, args.min_test_duration)
+        res.search_results[param] = res_i
+
+if args.json:
+    print("JSON results:", json.dumps(res.__dict__))
