@@ -213,9 +213,14 @@ else:
                     64)
                 print(base_index.nprobe)
         elif isinstance(quantizer, faiss.IndexHNSW):
-            print("   update quantizer efSearch=", quantizer.hnsw.efSearch, end=" -> ")
-            quantizer.hnsw.efSearch = 40 if index_ivf.nlist < 4e6 else 64
-            print(quantizer.hnsw.efSearch)
+            hnsw = quantizer.hnsw
+            print(
+                f"   update HNSW quantizer options, before: "
+                f"{hnsw.efSearch=:} {hnsw.efConstruction=:}"
+            )
+            hnsw.efSearch = 40 if index_ivf.nlist < 4e6 else 64
+            hnsw.efConstruction = 200
+            print(f"       after: {hnsw.efSearch=:} {hnsw.efConstruction=:}")
 
     apply_AQ_options(index_ivf or index, args)
 
