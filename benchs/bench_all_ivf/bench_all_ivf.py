@@ -39,15 +39,18 @@ aa('--compute_gt', default=False, action='store_true',
     help='compute and store the groundtruth')
 aa('--force_IP', default=False, action="store_true",
     help='force IP search instead of L2')
+aa('--accept_short_gt', default=False, action='store_true',
+    help='work around a problem with Deep1B GT')
 
 group = parser.add_argument_group('index consturction')
-
 aa('--indexkey', default='HNSW32', help='index_factory type')
 aa('--maxtrain', default=256 * 256, type=int,
    help='maximum number of training points (0 to set automatically)')
 aa('--indexfile', default='', help='file to read or write index from')
 aa('--add_bs', default=-1, type=int,
    help='add elements index by batches of this size')
+aa('--nthreads', default=-1, type=int,
+   help='nb of threads to use at train and add time')
 
 
 group = parser.add_argument_group('IVF options')
@@ -163,6 +166,13 @@ def apply_AQ_options(index, args):
         print("set RQ beam LUT to", args.RQ_use_beam_LUT)
         index.rq.use_beam_LUT
         index.rq.use_beam_LUT = args.RQ_use_beam_LUT
+
+
+if args.nthreads != -1:
+    print("Set nb of threads to", args.nthreads)
+    faiss.omp_set_num_threads(args.nthreads)
+else:
+    print("nb threads: ", faiss.omp_get_max_threads())
 
 
 if args.indexfile and os.path.exists(args.indexfile):
@@ -352,7 +362,9 @@ print("precomputed tables size:", precomputed_table_size)
 
 xq = sanitize(ds.get_queries())
 gt = ds.get_groundtruth(k=args.k)
-assert gt.shape[1] == args.k
+
+if not args.accept_short_gt: # Deep1B has only a single NN per query
+    assert gt.shape[1] == args.k
 
 if args.searchthreads != -1:
     print("Setting nb of threads to", args.searchthreads)
