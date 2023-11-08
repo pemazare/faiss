@@ -306,6 +306,7 @@ void ProductQuantizer::decode(const uint8_t* code, float* x) const {
 }
 
 void ProductQuantizer::decode(const uint8_t* code, float* x, size_t n) const {
+#pragma omp parallel for if (n > 100)
     for (size_t i = 0; i < n; i++) {
         this->decode(code + code_size * i, x + d * i);
     }
