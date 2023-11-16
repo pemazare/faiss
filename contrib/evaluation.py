@@ -386,10 +386,10 @@ class OperatingPointsWithRanges(OperatingPoints):
         """ sample a set of experiments of max size n_autotune
         (run all experiments in random order if n_autotune is 0)
         """
-        assert n_autotune >= 2
+        assert n_autotune == 0 or n_autotune >= 2
         totex = self.num_experiments()
         rs = np.random.RandomState(123)
-        if totex < n_autotune:
+        if n_autotune == 0 or totex < n_autotune:
             experiments = rs.permutation(totex - 2)
         else:
             experiments = rs.choice(
